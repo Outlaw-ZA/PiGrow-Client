@@ -1,0 +1,20 @@
+mqtt:
+  broker: "tcp://localhost:1883"
+  # For TLS: broker: "ssl://mosquitto.local:8883"
+  client_id: "pigrow-client"
+  # connect_timeout: 10
+  # keep_alive: 30
+  # username: ""
+  # password: ""
+
+sensors:
+  - id: "sensor-uuid-from-server"
+    type: "TEMP_HUMIDITY"
+    i2c_bus: "/dev/i2c-1"
+    i2c_address: 0x44
+    interval: "30s"
+
+devices:
+  - id: "device-uuid-from-server"
+    type: "LIGHT"
+    pins: [17]

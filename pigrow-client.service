@@ -1,0 +1,22 @@
+[Unit]
+Description=PiGrow Client - Sensor & Relay Controller
+After=network.target
+
+[Service]
+Type=simple
+User=pigrow
+WorkingDirectory=/opt/pigrow-client
+ExecStart=/opt/pigrow-client/pigrow-client -config /opt/pigrow-client/config.yaml
+Restart=always
+RestartSec=10
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/dev/gpiomem /dev/i2c-1 /dev/mem
+ReadOnlyPaths=/opt/pigrow-client
+
+[Install]
+WantedBy=multi-user.target
