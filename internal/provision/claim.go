@@ -127,20 +127,36 @@ func (c *ClaimSubscriber) Wait(ctx context.Context) (*ActiveState, error) {
 	if err := c.Transport.Subscribe(topic, func(payload []byte) {
 		var resp ClaimResponse
 		if err := json.Unmarshal(payload, &resp); err != nil {
-			errCh <- fmt.Errorf("parse claim: %w", err)
+			select {
+			case errCh <- fmt.Errorf("parse claim: %w", err):
+			default:
+			}
 			return
 		}
 		if err := resp.Verify(c.OwnMAC); err != nil {
-			errCh <- fmt.Errorf("verify claim: %w", err)
+			select {
+			case errCh <- fmt.Errorf("verify claim: %w", err):
+			default:
+			}
 			return
 		}
 		state := resp.ToActiveState()
 		if err := SaveActiveState(c.StatePath, state); err != nil {
-			errCh <- fmt.Errorf("persist state: %w", err)
+			select {
+			case errCh <- fmt.Errorf("persist state: %w", err):
+			default:
+			}
 			return
 		}
 		slog.Info("Claimed", "controllerId", state.ControllerID, "server", state.ServerHTTPURL)
-		resultCh <- state
+		select {
+		case resultCh <- state:
+		default:
+			// Already claimed; a duplicate ClaimResponse arrived
+			// before Unsubscribe completed. Spec §2.3 says the PIN
+			// is single-use; the second message is silently
+			// ignored so the MQTT callback goroutine returns.
+		}
 	}); err != nil {
 		return nil, fmt.Errorf("subscribe %s: %w", topic, err)
 	}

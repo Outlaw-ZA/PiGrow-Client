@@ -115,16 +115,12 @@ func runUnclaimedFlow(configPath, hardwarePath, serialPath, statePath, fwVersion
 
 	// Re-read state.json + apply precedence so the active loop
 	// starts with the claimed controllerId and broker credentials.
+	// periph host was already initialised in main() at boot — no
+	// need to retry here, and retrying it is wasteful even if safe.
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		slog.Error("Config reload failed", "error", err)
 		os.Exit(1)
-	}
-	if hasHardwareSensors(cfg) {
-		if err := sensor.InitHost(); err != nil {
-			slog.Error("Periph host init failed", "error", err)
-			os.Exit(1)
-		}
 	}
 	st, err := provision.LoadActiveState(statePath)
 	if err != nil {

@@ -8,8 +8,10 @@ import (
 	"time"
 )
 
-// BeaconInterval is the spec §2.1 cadence (every 7s).
-const BeaconInterval = 7 * time.Second
+// BeaconInterval is the spec §2.1 cadence (every 7s). It is a var
+// rather than a const so tests can shorten the interval to keep run
+// time bounded; production code never mutates it.
+var BeaconInterval = 7 * time.Second
 
 // BeaconBroadcastAddr is the spec §2.1 UDP broadcast destination.
 // Tests override it to a loopback address.

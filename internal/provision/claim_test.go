@@ -40,6 +40,15 @@ func (f *fakeClaimTransport) inject(topic string, payload []byte) {
 	}
 }
 
+// hasSubscription reports whether Subscribe has been called for any
+// topic yet — used by tests that race a Subscribe against their own
+// observer. Locks the underlying map; safe under -race.
+func (f *fakeClaimTransport) hasSubscription() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.subs) > 0
+}
+
 var _ ClaimTransport = (*fakeClaimTransport)(nil)
 
 func TestClaimTopicFormat(t *testing.T) {

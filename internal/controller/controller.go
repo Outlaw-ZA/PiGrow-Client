@@ -176,7 +176,11 @@ func (c *Controller) commandWorker(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 func (c *Controller) executeCommand(job cmdJob) {
+	// Lookup must be locked: deviceCommandHandler writes to the same
+	// map from the MQTT callback goroutine while this worker reads it.
+	c.mu.Lock()
 	dev, ok := c.deviceMap[job.deviceID]
+	c.mu.Unlock()
 	if !ok {
 		slog.Warn("Device gone before command execution", "deviceId", job.deviceID)
 		return

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -216,4 +217,81 @@ func TestDeviceCommandExecutesAndPublishesState(t *testing.T) {
 	if len(stateEntries) < 1 {
 		t.Fatal("expected state publish after command execution")
 	}
+}
+
+// TestDeviceCommandConcurrent exercises the path where
+// deviceCommandHandler runs in one goroutine (simulating the MQTT
+// callback) while commandWorker runs in another goroutine and reads
+// deviceMap via executeCommand. This is the scenario the blocking-2
+// race fix targets; under -race, an unlocked executeCommand lookup
+// triggers "WARNING: DATA RACE" reports on c.deviceMap.
+//
+// The test runs producers and worker concurrently with deliberate
+// yield points so the producer's map write and the worker's unpro-
+// tected lookup overlap. Without the lock fix, -race reports the
+// race; with the lock fix the test passes cleanly.
+func TestDeviceCommandConcurrent(t *testing.T) {
+	mock := &mockMQTT{}
+	ctrl := Controller{
+		cfg:        &config.Config{},
+		mqttClient: mock,
+		sensors:    []sensor.Sensor{},
+		deviceMap: map[string]device.Device{
+			"dev-a": &mockDevice{id: "dev-a"},
+			"dev-b": &mockDevice{id: "dev-b"},
+		},
+		cmdCh: make(chan cmdJob, 1024),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go ctrl.commandWorker(ctx, &wg)
+
+	// Two writers hammer the map under c.mu while the worker reads
+	// it from executeCommand. The writers vary the device id so
+	// every iteration either inserts a fresh entry or hits the
+	// existing-key path — keeping the device-map churn high. The
+	// reader loop runs the worker's executeCommand path (which
+	// currently reads the map without holding c.mu) so the race
+	// detector has two distinct goroutines touching the same map
+	// unsynchronized.
+	var ready, done sync.WaitGroup
+	ready.Add(2)
+	done.Add(2)
+
+	go func() {
+		defer done.Done()
+		ready.Done()
+		for i := 0; i < 50000; i++ {
+			id := "dev-x"
+			if i%2 == 1 {
+				id = "dev-y"
+			}
+			ctrl.mu.Lock()
+			if _, ok := ctrl.deviceMap[id]; !ok {
+				ctrl.deviceMap[id] = &mockDevice{id: id}
+			}
+			ctrl.mu.Unlock()
+			if i%16 == 0 {
+				runtime.Gosched()
+			}
+		}
+	}()
+
+	go func() {
+		defer done.Done()
+		ready.Done()
+		for i := 0; i < 200; i++ {
+			job := cmdJob{deviceID: "dev-x", action: "ON", pin: 17, timestamp: 1000}
+			ctrl.executeCommand(job)
+			runtime.Gosched()
+		}
+	}()
+
+	ready.Wait()
+	done.Wait()
+
+	cancel()
+	wg.Wait()
 }
