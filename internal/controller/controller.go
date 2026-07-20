@@ -36,39 +36,22 @@ type cmdJob struct {
 	timestamp int64
 }
 
-// Controller orchestrates sensor reading, telemetry publishing,
-// and device command handling.
 type Controller struct {
 	cfg        *config.Config
-	mqttClient *mqtt.Client
+	mqttClient mqtt.Client
 	sensors    []sensor.Sensor
 	deviceMap  map[string]device.Device
-	devicePins map[string]map[int]bool
+	mu         sync.Mutex
 	cmdCh      chan cmdJob
 }
 
 // New creates a Controller.
-func New(cfg *config.Config, mc *mqtt.Client, sensors []sensor.Sensor, devices []device.Device) *Controller {
-	dm := make(map[string]device.Device, len(devices))
-	for _, d := range devices {
-		dm[d.ID()] = d
-	}
-	dp := make(map[string]map[int]bool)
-	for _, dc := range cfg.Devices {
-		if len(dc.Pins) > 0 {
-			pins := make(map[int]bool, len(dc.Pins))
-			for _, p := range dc.Pins {
-				pins[p] = true
-			}
-			dp[dc.ID] = pins
-		}
-	}
+func New(cfg *config.Config, mc mqtt.Client, sensors []sensor.Sensor) *Controller {
 	return &Controller{
 		cfg:        cfg,
 		mqttClient: mc,
 		sensors:    sensors,
-		deviceMap:  dm,
-		devicePins: dp,
+		deviceMap:  make(map[string]device.Device),
 		cmdCh:      make(chan cmdJob, 64),
 	}
 }
@@ -81,13 +64,11 @@ func (c *Controller) Start(ctx context.Context, wg *sync.WaitGroup) {
 		go c.sensorLoop(ctx, wg, s)
 	}
 
-	if len(c.deviceMap) > 0 {
-		if err := c.mqttClient.Subscribe("devices/+/commands", c.deviceCommandHandler); err != nil {
-			slog.Error("Failed to subscribe to device commands", "error", err)
-		}
-		wg.Add(1)
-		go c.commandWorker(ctx, wg)
+	if err := c.mqttClient.Subscribe("devices/+/commands", c.deviceCommandHandler); err != nil {
+		slog.Error("Failed to subscribe to device commands", "error", err)
 	}
+	wg.Add(1)
+	go c.commandWorker(ctx, wg)
 
 	<-ctx.Done()
 }
@@ -159,23 +140,17 @@ func (c *Controller) deviceCommandHandler(topic string, payload []byte) {
 	}
 	deviceID := parts[1]
 
-	dev, ok := c.deviceMap[deviceID]
-	if !ok {
-		slog.Debug("Command for unknown device, ignoring", "deviceId", deviceID)
-		return
+	c.mu.Lock()
+	_, exists := c.deviceMap[deviceID]
+	if !exists {
+		c.deviceMap[deviceID] = device.NewRPIDevice(deviceID)
+		slog.Info("Lazy-created device from command", "deviceId", deviceID)
 	}
-	_ = dev // keep for clarity — deviceMap presence confirms the device is known
+	c.mu.Unlock()
 
 	var cmd CommandPayload
 	if err := json.Unmarshal(payload, &cmd); err != nil {
 		slog.Error("Parse command payload failed", "deviceId", deviceID, "error", err)
-		return
-	}
-
-	// Validate pin against device allowlist.
-	allowedPins, ok := c.devicePins[deviceID]
-	if ok && !allowedPins[cmd.Pin] {
-		slog.Warn("Command pin not in device allowlist", "deviceId", deviceID, "pin", cmd.Pin)
 		return
 	}
 

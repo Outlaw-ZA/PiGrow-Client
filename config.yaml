@@ -1,5 +1,5 @@
 mqtt:
-  broker: "tcp://localhost:1883"
+  broker: "tcp://192.168.0.105:1883"
   # For TLS: broker: "ssl://mosquitto.local:8883"
   client_id: "pigrow-client"
   # connect_timeout: 10
@@ -7,14 +7,15 @@ mqtt:
   # username: ""
   # password: ""
 
+# Optional PiGrow-Server REST API connection for heartbeat.
+# If unset, the client boots without server-side liveness reporting.
+# server:
+#   http_url: "http://192.168.0.105:4000/api"
+#   controller_id: "<controller-uuid-from-server>"
+
 sensors:
-  - id: "sensor-uuid-from-server"
+  - id: "d3ddce1c-4665-467f-98a5-c0fec5d6b9ed"
     type: "TEMP_HUMIDITY"
     i2c_bus: "/dev/i2c-1"
     i2c_address: 0x44
     interval: "30s"
-
-devices:
-  - id: "device-uuid-from-server"
-    type: "LIGHT"
-    pins: [17]

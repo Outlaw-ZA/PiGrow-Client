@@ -12,8 +12,14 @@ import (
 // Config holds the full application configuration.
 type Config struct {
 	MQTT    MQTTConfig     `yaml:"mqtt"`
+	Server  ServerConfig   `yaml:"server"`
 	Sensors []SensorConfig `yaml:"sensors"`
-	Devices []DeviceConfig `yaml:"devices"`
+}
+
+// ServerConfig holds the PiGrow-Server REST API connection settings.
+type ServerConfig struct {
+	HTTPURL      string `yaml:"http_url"`
+	ControllerID string `yaml:"controller_id"`
 }
 
 // MQTTConfig holds broker connection settings.
@@ -35,12 +41,6 @@ type SensorConfig struct {
 	Interval   string `yaml:"interval"`
 }
 
-// DeviceConfig holds a device's identity and pin allowlist.
-type DeviceConfig struct {
-	ID   string `yaml:"id"`
-	Type string `yaml:"type"`
-	Pins []int  `yaml:"pins"`
-}
 
 // Load reads and validates the YAML config at path.
 func Load(path string) (*Config, error) {
@@ -75,9 +75,6 @@ func (c *Config) validate() error {
 	if c.MQTT.ClientID == "" {
 		return fmt.Errorf("mqtt.client_id is required")
 	}
-	if len(c.Sensors) == 0 && len(c.Devices) == 0 {
-		return fmt.Errorf("at least one sensor or device must be configured")
-	}
 
 	if c.MQTT.ConnectTimeout == 0 {
 		c.MQTT.ConnectTimeout = 10
@@ -101,16 +98,6 @@ func (c *Config) validate() error {
 		}
 	}
 
-	for i, d := range c.Devices {
-		if d.ID == "" {
-			return fmt.Errorf("devices[%d].id is required", i)
-		}
-		for _, p := range d.Pins {
-			if p < 2 || p > 27 {
-				return fmt.Errorf("devices[%d].pin %d: must be 2–27 (I2C/SPI/UART pins excluded)", i, p)
-			}
-		}
-	}
 
 	return nil
 }
