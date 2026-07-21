@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -107,7 +108,8 @@ func (c *Config) validate() error {
 			// yet would still publish to sensors//telemetry — log
 			// a warning so misconfiguration is visible, but don't
 			// refuse to load.
-			fmt.Fprintf(os.Stderr, "warning: sensors[%d].id is empty; will publish to sensors//telemetry until state.json overlays it\n", i)
+			slog.Warn("Sensor ID is empty; will publish to sensors//telemetry until state.json overlays it",
+				"sensorIndex", i, "type", s.Type)
 		}
 		if s.Type == "" {
 			return fmt.Errorf("sensors[%d].type is required", i)

@@ -341,3 +341,61 @@ func TestResolveActive_YAMLOnlySensorKeptWithWarning(t *testing.T) {
 		t.Errorf("state-only sensor not appended: %+v", got.Sensors[1])
 	}
 }
+
+// TestResolveActive_DuplicateStateSensorsDeduped guards the
+// append-loop dedup: if a malformed server payload carries two
+// sensors with identical (type, bus, addr), the resolved config
+// must contain only one of them. Without the dedup fix the append
+// loop would emit the duplicate twice.
+//
+// The overlay indexes state sensors by canonical key in a map, so a
+// duplicate key overwrites — the latest occurrence in the state
+// payload wins (matching the server's upsert semantic).
+func TestResolveActive_DuplicateStateSensorsDeduped(t *testing.T) {
+	cfg := &config.Config{
+		MQTT: config.MQTTConfig{Broker: "tcp://x", ClientID: "c"},
+		// YAML has zero sensors so both state entries hit the
+		// unmatched-append branch.
+	}
+	state := &ActiveState{
+		ProvisionState: "ACTIVE",
+		ControllerID:   "c",
+		ServerHTTPURL:  "http://s",
+		Sensors: []Sensor{
+			stateSensor("uuid-first", "TEMP_HUMIDITY", 1, 0x44, 30),
+			stateSensor("uuid-second", "TEMP_HUMIDITY", 1, 0x44, 30),
+		},
+	}
+	got := ResolveActiveConfig(cfg, state)
+	if len(got.Sensors) != 1 {
+		t.Fatalf("duplicate state sensors must be deduped; got %d sensors", len(got.Sensors))
+	}
+	// Last occurrence wins (map overwrite matches upsert semantics).
+	if got.Sensors[0].ID != "uuid-second" {
+		t.Errorf("expected latest duplicate entry to win, got %q", got.Sensors[0].ID)
+	}
+}
+
+// TestResolveActive_DuplicateStateDevicesDeduped is the device
+// counterpart of TestResolveActive_DuplicateStateSensorsDeduped.
+func TestResolveActive_DuplicateStateDevicesDeduped(t *testing.T) {
+	cfg := &config.Config{
+		MQTT: config.MQTTConfig{Broker: "tcp://x", ClientID: "c"},
+	}
+	state := &ActiveState{
+		ProvisionState: "ACTIVE",
+		ControllerID:   "c",
+		ServerHTTPURL:  "http://s",
+		Devices: []Relay{
+			{ID: "dev-1", Type: "LIGHT", Pin: 17},
+			{ID: "dev-2", Type: "LIGHT", Pin: 17},
+		},
+	}
+	got := ResolveActiveConfig(cfg, state)
+	if len(got.Devices) != 1 {
+		t.Fatalf("duplicate state devices must be deduped; got %d devices", len(got.Devices))
+	}
+	if got.Devices[0].ID != "dev-2" {
+		t.Errorf("expected latest duplicate device entry to win, got %q", got.Devices[0].ID)
+	}
+}

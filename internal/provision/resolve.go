@@ -85,7 +85,12 @@ func overlaySensors(yamlSensors []config.SensorConfig, stateSensors []Sensor) []
 	}
 
 	out := make([]config.SensorConfig, 0, len(yamlSensors)+len(stateIndex))
-	matched := make(map[string]bool, len(stateIndex))
+	// `seen` tracks every state-side key we have already accounted
+	// for — either consumed by a YAML match above, or appended as a
+	// state-only entry below. This guards against duplicate-keyed
+	// state entries emitting the same sensor twice into the
+	// resolved config.
+	seen := make(map[string]bool, len(stateIndex))
 	for _, ys := range yamlSensors {
 		key := yamlSensorKey(ys)
 		if key == "" {
@@ -98,7 +103,7 @@ func overlaySensors(yamlSensors []config.SensorConfig, stateSensors []Sensor) []
 		}
 		if ss, ok := stateIndex[key]; ok {
 			ys.ID = ss.ID
-			matched[key] = true
+			seen[key] = true
 		} else {
 			slog.Warn("No state.json sensor matches YAML sensor, keeping YAML ID",
 				"type", ys.Type, "yamlId", ys.ID, "key", key)
@@ -110,7 +115,7 @@ func overlaySensors(yamlSensors []config.SensorConfig, stateSensors []Sensor) []
 	// covers the case where someone removed sensors from
 	// config.yaml after the claim.
 	for _, key := range stateOrder {
-		if matched[key] {
+		if seen[key] {
 			continue
 		}
 		ss := stateIndex[key]
@@ -120,6 +125,7 @@ func overlaySensors(yamlSensors []config.SensorConfig, stateSensors []Sensor) []
 				"type", ss.Type, "id", ss.ID)
 			continue
 		}
+		seen[key] = true
 		slog.Info("Appending state-only sensor", "type", ss.Type, "id", ss.ID)
 		out = append(out, cfg)
 	}
@@ -145,12 +151,14 @@ func overlayDevices(yamlDevices []config.DeviceConfig, stateDevices []Relay) []c
 	}
 
 	out := make([]config.DeviceConfig, 0, len(yamlDevices)+len(stateIndex))
-	matched := make(map[string]bool, len(stateIndex))
+	// `seen` dedupes: a duplicate-keyed state entry (same type+pin)
+	// must not be appended twice into the resolved config.
+	seen := make(map[string]bool, len(stateIndex))
 	for _, yd := range yamlDevices {
 		key := deviceKey(yd.Type, yd.Pin)
 		if sd, ok := stateIndex[key]; ok {
 			yd.ID = sd.ID
-			matched[key] = true
+			seen[key] = true
 		} else {
 			slog.Warn("No state.json device matches YAML device, keeping YAML ID",
 				"type", yd.Type, "yamlId", yd.ID, "pin", yd.Pin)
@@ -159,10 +167,11 @@ func overlayDevices(yamlDevices []config.DeviceConfig, stateDevices []Relay) []c
 	}
 
 	for _, key := range stateOrder {
-		if matched[key] {
+		if seen[key] {
 			continue
 		}
 		sd := stateIndex[key]
+		seen[key] = true
 		out = append(out, convertStateDeviceToConfig(sd))
 		slog.Info("Appending state-only device", "type", sd.Type, "id", sd.ID, "pin", sd.Pin)
 	}
