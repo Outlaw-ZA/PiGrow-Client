@@ -49,15 +49,11 @@ func main() {
 	}
 	slog.Info("Config loaded", "path", *configPath)
 
-	if hasHardwareSensors(cfg) {
-		if err := sensor.InitHost(); err != nil {
-			slog.Error("Failed to initialise periph host", "error", err)
-			os.Exit(1)
-		}
-		slog.Info("Periph host initialised")
-	}
-
 	// Active state (if any) overrides legacy YAML fields per spec §5.
+	// Periph host init runs AFTER ResolveActiveConfig so it sees the
+	// resolved sensor list — the overlay can add sensors that weren't
+	// in the legacy YAML (state-only append path), and those need I2C/GPIO
+	// drivers initialised too.
 	st, err := provision.LoadActiveState(*statePath)
 	if err != nil {
 		slog.Error("Failed to load state", "error", err)
@@ -67,6 +63,14 @@ func main() {
 		slog.Info("Active state loaded", "controllerId", st.ControllerID, "server", st.ServerHTTPURL)
 	}
 	cfg = provision.ResolveActiveConfig(cfg, st)
+
+	if hasHardwareSensors(cfg) {
+		if err := sensor.InitHost(); err != nil {
+			slog.Error("Failed to initialise periph host", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("Periph host initialised")
+	}
 
 	enterUnclaimed := *unclaimedFlag || st == nil || !st.IsClaimed()
 
