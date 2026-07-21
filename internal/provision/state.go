@@ -14,15 +14,23 @@ import (
 // ClaimResponse. It is the single source of truth for active-mode
 // controller ID + broker + server URL; legacy config.yaml is fallback
 // when this file is absent (see spec §5 backward compat).
+//
+// Sensors and Devices mirror the server-issued manifest: the IDs are
+// the UUIDs the server assigned, and are overlaid onto the legacy
+// config.yaml sensor/device list during active-mode resolution. Older
+// state.json files (pre-sensor-overlay) unmarshal to nil slices; the
+// overlay treats nil as "nothing to overlay" and the YAML wins.
 type ActiveState struct {
-	ProvisionState  string `json:"provisionState"`
-	ControllerID    string `json:"controllerId"`
-	ControllerMAC   string `json:"controllerMac"`
-	MQTTBrokerURL   string `json:"mqttBrokerUrl"`
-	MQTTUsername    string `json:"mqttUsername"`
-	MQTTPassword    string `json:"mqttPassword"`
-	ServerHTTPURL   string `json:"serverHttpUrl"`
-	PairedAt        int64  `json:"pairedAt"`
+	ProvisionState string   `json:"provisionState"`
+	ControllerID   string   `json:"controllerId"`
+	ControllerMAC  string   `json:"controllerMac"`
+	MQTTBrokerURL  string   `json:"mqttBrokerUrl"`
+	MQTTUsername   string   `json:"mqttUsername"`
+	MQTTPassword   string   `json:"mqttPassword"`
+	ServerHTTPURL  string   `json:"serverHttpUrl"`
+	PairedAt       int64    `json:"pairedAt"`
+	Sensors        []Sensor `json:"sensors,omitempty"`
+	Devices        []Relay  `json:"devices,omitempty"`
 }
 
 // IsClaimed reports whether this state represents a completed claim

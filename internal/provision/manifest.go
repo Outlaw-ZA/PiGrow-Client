@@ -7,8 +7,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Sensor is one entry in hwManifest.sensors[] per spec §2.2.
+// Sensor is one entry in hwManifest.sensors[] (Pi-side hardware
+// declaration) and one element of the claim payload's `sensors[]`
+// (server-issued manifest with ID). The ID field is omitempty so the
+// Pi-authored hardware.yaml works without it; the server-filled
+// JSON keeps it.
 type Sensor struct {
+	ID       string `json:"id,omitempty" yaml:"id,omitempty"`
 	Type     string `json:"type" yaml:"type"`
 	Protocol string `json:"protocol,omitempty" yaml:"protocol,omitempty"`
 	I2CBus   *int   `json:"i2cBus,omitempty" yaml:"i2c_bus,omitempty"`
@@ -17,8 +22,11 @@ type Sensor struct {
 	Interval *int   `json:"interval,omitempty" yaml:"interval,omitempty"`
 }
 
-// Relay is one entry in hwManifest.relays[] per spec §2.2.
+// Relay is one entry in hwManifest.relays[] (Pi-side hardware
+// declaration) and one element of the claim payload's `devices[]`
+// (server-issued manifest with ID). Same omitempty rule as Sensor.
 type Relay struct {
+	ID   string `json:"id,omitempty" yaml:"id,omitempty"`
 	Type string `json:"type" yaml:"type"`
 	Pin  int    `json:"pin" yaml:"pin"`
 	Name string `json:"name,omitempty" yaml:"name,omitempty"`

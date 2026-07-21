@@ -46,7 +46,6 @@ sensors:
 	}
 }
 
-
 func TestLoadServerConfig(t *testing.T) {
 	yaml := `
 mqtt:
@@ -143,7 +142,6 @@ sensors:
 		t.Fatal("expected error for invalid I2C address, got nil")
 	}
 }
-
 
 func TestLoadDefaults(t *testing.T) {
 	yaml := `

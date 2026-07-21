@@ -8,15 +8,24 @@ import (
 )
 
 // ClaimResponse is the §3.2 server-to-Pi payload.
+//
+// Sensors and Devices mirror the server-issued manifest so the Pi can
+// persist the UUIDs the server assigned and overlay them onto the
+// legacy config.yaml entries during active-mode resolution. Both
+// fields are optional: a pre-overlay server (no sensors/devices key
+// in the payload) leaves them nil and the YAML continues to drive the
+// sensor loop.
 type ClaimResponse struct {
-	Schema        int    `json:"schema"`
-	ControllerID  string `json:"controllerId"`
-	ControllerMAC string `json:"controllerMac"`
-	MQTTBrokerURL string `json:"mqttBrokerUrl"`
-	MQTTUsername  string `json:"mqttUsername"`
-	MQTTPassword  string `json:"mqttPassword"`
-	ServerHTTPURL string `json:"serverHttpUrl"`
-	PairedAt      int64  `json:"pairedAt"`
+	Schema        int      `json:"schema"`
+	ControllerID  string   `json:"controllerId"`
+	ControllerMAC string   `json:"controllerMac"`
+	MQTTBrokerURL string   `json:"mqttBrokerUrl"`
+	MQTTUsername  string   `json:"mqttUsername"`
+	MQTTPassword  string   `json:"mqttPassword"`
+	ServerHTTPURL string   `json:"serverHttpUrl"`
+	PairedAt      int64    `json:"pairedAt"`
+	Sensors       []Sensor `json:"sensors,omitempty"`
+	Devices       []Relay  `json:"devices,omitempty"`
 }
 
 // Verify checks the §3.3 Pi-side invariants on a parsed ClaimResponse:
@@ -53,6 +62,11 @@ func (r *ClaimResponse) Verify(ownMAC string) error {
 
 // ToActiveState converts a verified claim into the on-disk state.json
 // representation (spec §3.3 step 2).
+//
+// Sensors and Devices are copied verbatim from the claim payload. A
+// nil slice (legacy server that doesn't send them) is preserved as nil
+// so LoadActiveState can distinguish "no sensors" from "empty
+// sensors" — the overlay treats both as "nothing to overlay".
 func (r *ClaimResponse) ToActiveState() *ActiveState {
 	return &ActiveState{
 		ProvisionState: "ACTIVE",
@@ -63,6 +77,8 @@ func (r *ClaimResponse) ToActiveState() *ActiveState {
 		MQTTPassword:   r.MQTTPassword,
 		ServerHTTPURL:  r.ServerHTTPURL,
 		PairedAt:       r.PairedAt,
+		Sensors:        r.Sensors,
+		Devices:        r.Devices,
 	}
 }
 
@@ -91,9 +107,9 @@ type ClaimTransport interface {
 
 // ClaimSubscriber holds the parameters for waiting on a ClaimResponse.
 type ClaimSubscriber struct {
-	Transport  ClaimTransport
-	OwnMAC     string
-	StatePath  string
+	Transport ClaimTransport
+	OwnMAC    string
+	StatePath string
 }
 
 // NewClaimSubscriber is a thin constructor for symmetry with other

@@ -14,6 +14,7 @@ type Config struct {
 	MQTT    MQTTConfig     `yaml:"mqtt"`
 	Server  ServerConfig   `yaml:"server"`
 	Sensors []SensorConfig `yaml:"sensors"`
+	Devices []DeviceConfig `yaml:"devices,omitempty"`
 }
 
 // ServerConfig holds the PiGrow-Server REST API connection settings.
@@ -33,6 +34,13 @@ type MQTTConfig struct {
 }
 
 // SensorConfig holds a sensor's identity and I2C parameters.
+//
+// ID is optional at load time: an empty ID is allowed because the
+// active-mode overlay (provision.ResolveActiveConfig) fills it from
+// the server-issued state.json. The legacy unclaimed path still
+// requires a non-empty ID at the point the driver reads it
+// (main.buildSensors), so loading a YAML with empty IDs logs a
+// warning but does not fail.
 type SensorConfig struct {
 	ID         string `yaml:"id"`
 	Type       string `yaml:"type"`
@@ -41,6 +49,15 @@ type SensorConfig struct {
 	Interval   string `yaml:"interval"`
 }
 
+// DeviceConfig holds a GPIO device's identity and pin assignment.
+// Same ID rule as SensorConfig: empty is fine at load time, the
+// active-mode overlay fills it.
+type DeviceConfig struct {
+	ID   string `yaml:"id"`
+	Type string `yaml:"type"`
+	Pin  int    `yaml:"pin"`
+	Name string `yaml:"name,omitempty"`
+}
 
 // Load reads and validates the YAML config at path.
 func Load(path string) (*Config, error) {
@@ -85,7 +102,12 @@ func (c *Config) validate() error {
 
 	for i, s := range c.Sensors {
 		if s.ID == "" {
-			return fmt.Errorf("sensors[%d].id is required", i)
+			// Allowed: the active-mode overlay fills the ID from
+			// state.json. Unclaimed-boot Pis with no state.json
+			// yet would still publish to sensors//telemetry — log
+			// a warning so misconfiguration is visible, but don't
+			// refuse to load.
+			fmt.Fprintf(os.Stderr, "warning: sensors[%d].id is empty; will publish to sensors//telemetry until state.json overlays it\n", i)
 		}
 		if s.Type == "" {
 			return fmt.Errorf("sensors[%d].type is required", i)
@@ -98,6 +120,14 @@ func (c *Config) validate() error {
 		}
 	}
 
+	for i, d := range c.Devices {
+		if d.Type == "" {
+			return fmt.Errorf("devices[%d].type is required", i)
+		}
+		if d.Pin <= 0 {
+			return fmt.Errorf("devices[%d].pin must be > 0", i)
+		}
+	}
 
 	return nil
 }
