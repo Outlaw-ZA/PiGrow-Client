@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -87,6 +88,7 @@ func (p *Pin) Invalidate() {
 func (p *Pin) rotateLocked(now time.Time) {
 	p.pin = mintPIN()
 	p.expireAt = now.Add(pinValidity)
+	slog.Info("PIN rotated", "expiresAt", p.expireAt.UnixMilli())
 }
 
 // mintPIN returns a 6-digit zero-padded ASCII string from crypto/rand.

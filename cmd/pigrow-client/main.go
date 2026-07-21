@@ -207,7 +207,7 @@ func runActiveFlow(cfg *config.Config, claimBrokerURL, claimUsername, claimPassw
 func heartbeatLoop(ctx context.Context, wg *sync.WaitGroup, baseURL, controllerID, _ string) {
 	defer wg.Done()
 	client := &http.Client{Timeout: 10 * time.Second}
-	url := fmt.Sprintf("%s/controllers/%s/heartbeat", baseURL, controllerID)
+	url := fmt.Sprintf("%s/api/controllers/%s/heartbeat", baseURL, controllerID)
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
